@@ -4,6 +4,8 @@
 # import everything from tkinter module
 from tkinter import *
 from tkinter import ttk
+from datetime import datetime
+import sys
 
 import serial
 
@@ -304,41 +306,53 @@ def reset_cmd():
     return
 
 def read_volt(): 
-    voltage_local = globals()['voltage']
-    volt_coarse = voltage_local // 1
-    volt_fine = voltage_local % 1
+    # voltage_local = globals()['voltage']
+    # inputString = "read_d;"
+    inputString = "read_d_pwm;"
+    inputString += '\n'
+    print(inputString)
+    ser.write(inputString.encode('utf-8'))
+    rv = ser.readline().decode('utf-8').strip()
+    print(rv)
+    read_dictionary = dict(subString.split(":") for subString in rv.split(","))
+    value_coarse = int(float(read_dictionary["0"]))
+    value_fine = int(float(read_dictionary["1"]))
+    
+    coarse_frac = value_coarse / globals()['digipot_wiper_max']
+    fine_frac = value_fine / globals()['digipot_wiper_max']
+    
+    voltage = globals()['max_voltage'] * ((coarse_frac * 9090/10000)  + (fine_frac * 9090/100000))
+    
+    volt_coarse = voltage // 1
+    volt_fine = voltage % 1
+    
+    print(voltage)
     
     globals()['input_coarse'].set(str(volt_coarse))
     globals()['input_fine'].set(str(volt_fine))
+    
+    # coarse_scale.set(0)
+    # fine_scale.set(0)
+    
     # globals()['voltage_ratio'].set()
     
     updateGrid()
     
 def write_volt():
-    max_volts = globals()['max_voltage']
+    # max_volts = globals()['max_voltage']
     
-    volt_coarse = int(globals()['input_coarse'].get())
-    volt_fine = int(globals()['input_fine'].get())
-        
-    volt = float(str(int(volt_coarse)) + '.' + str(int(volt_fine)))
+    # volt_coarse = int(globals()['input_coarse'].get())
+    # volt_fine = int(globals()['input_fine'].get())
     
-    if volt > max_volts:
-        volt = max_volts
-        globals()['input_coarse'].set(str(max_volts // 1))
-        globals()['input_fine'].set(str(int(max_volts % 1)))
+    volt_coarse = int(coarse_scale.get())
+    volt_fine = int(fine_scale.get())
+       
+    # value_coarse = volt_coarse / globals()['max_voltage'] * globals()['digipot_wiper_max']
+    # value_fine = volt_fine / globals()['max_voltage'] * globals()['digipot_wiper_max']
+    # inputString = "write_d; 0:" + value_coarse + ",1:" + value_fine
     
-    print(volt)
+    inputString = "write_d; 0:" + str(volt_coarse) + ",1:" + str(volt_fine)
     
-    globals()['voltage'] = volt
-    
-    globals()['voltage_ratio'] = volt / max_volts
-    
-    inputString = "write_mA; "
-    for pin, key in pinout.items():
-        newVal = globals()['voltage_ratio'] * pixels[key].value
-        inputString += "{}:{}".format(pin, newVal)
-        if int(pin) < len(pinout) - 1:
-            inputString += ','
     inputString += '\n'
     print(inputString)
     
@@ -351,30 +365,17 @@ def write_volt():
     
     
 def reset_volt():
-    max_volts = globals()['max_voltage']
-    # volt = max_volts
+    volt_coarse = 0
+    volt_fine = 0
+    inputString = "write_d; 0:" + str(volt_coarse) + ",1:" + str(volt_fine)
     
-    volt_coarse = globals()['max_voltage'] // 1
-    globals()['input_coarse'].set(str(volt_coarse))
-
-    volt_fine = globals()['max_voltage'] % 1
-    globals()['input_fine'].set(str(volt_fine))
-        
-    # volt = float(str(int(volt_coarse)) + '.' + str(int(volt_fine)))
-    
-    globals()['voltage'] = max_volts
-    globals()['voltage_ratio'] = 1.0
-    
-    inputString = "write_mA; "
-    for pin, key in pinout.items():
-        newVal = globals()['voltage_ratio'] * pixels[key].value
-        inputString += "{}:{}".format(pin, newVal)
-        if int(pin) < len(pinout) - 1:
-            inputString += ','
     inputString += '\n'
     print(inputString)
     
     ser.write(inputString.encode('utf-8'))
+    
+    coarse_scale.set(0)
+    fine_scale.set(0)
     
     updateGrid()
 
@@ -399,32 +400,45 @@ def readSerial(input):
     rv = ""
     return rv
 
-
+def show_values():
+    print(coarse_scale.get(), fine_scale.get())
  
 # Driver code
 if __name__ == "__main__":
+    COM_PORT = input("Please enter COM PORT (e.g. for COM PORT 4 type COM4): ")
+    print("Connecting to COM PORT: " + COM_PORT)
     
-    ser = serial.Serial('COM4', baudrate=9600, timeout=1)
+    ser = serial.Serial(COM_PORT, baudrate=9600, timeout=1)
     # ser.reset_input_buffer()
     input_Ser = ""
     
+    start_time = datetime.now()
+    
     while input_Ser == "":
         input_Ser = ser.readline().decode('utf-8').strip()
+        time_delta = datetime.now() - start_time
+        if time_delta.total_seconds() >= 15:
+            print("connection timeout!")
+            break
     
     print(input_Ser)
     
     if input_Ser == "RESET":
         ser.write("\n".encode('utf-8'))
         print("connection successful!")
+    else:
+        print("connection unsuccessful!")
+        sys.exit(0)
         
     # print(input)
     
-    # print("testing!")
-    
+    # print("testing!") 
+
     max_pixels = 24
-    max_voltage = 3.3
-    voltage = 3.3
-    voltage_ratio = voltage / max_voltage
+    max_voltage = 10.0
+    digipot_wiper_max = 127
+    voltage = 10.0
+    voltage_ratio = 1
     
     
     # create a GUI window
@@ -608,6 +622,26 @@ if __name__ == "__main__":
     read_button.grid(row=13,column=0, sticky='nesw')
     write_button.grid(row=13,column=1, sticky='nesw')
     reset_button.grid(row=13,column=2, sticky='nesw')
+    
+
+    coarse_scale = Scale(loginFrame, from_=0, to=127, tickinterval=16, orient=HORIZONTAL)
+    coarse_scale.set(0)
+    coarse_scale.grid(row=15,column=0, columnspan=3, sticky='nesw')
+    # coarse_scale.pack()
+    fine_scale = Scale(loginFrame, from_=0, to=127, tickinterval=16, orient=HORIZONTAL)
+    fine_scale.set(0)
+    fine_scale.grid(row=16,column=0, columnspan=3, sticky='nesw')
+    # fine_scale.pack()
+    # Button(loginFrame, text='Show', command=show_values).pack()
+    # scale_write_button = Button(loginFrame, text='WRITE', command=show_values)
+    # scale_write_button.grid(row=17,column=0, sticky='nesw')
+    
+    scale_read_button = Button(loginFrame, text="READ", fg='black', bg='green', activeforeground='light grey', activebackground='black', command=lambda:read_volt(), relief=FLAT)
+    scale_write_button = Button(loginFrame, text="WRITE", fg='black', bg='red', activeforeground='light grey', activebackground='black', command=lambda:write_volt(), relief=FLAT)
+    scale_reset_button = Button(loginFrame, text="RESET", fg='black', bg='light grey', activeforeground='light grey', activebackground='black', command=lambda:reset_volt(), relief=FLAT)
+    read_button.grid(row=17,column=0, sticky='nesw')
+    write_button.grid(row=17,column=1, sticky='nesw')
+    reset_button.grid(row=17,column=2, sticky='nesw')
     
     # ttk.Separator(
     # master=gui,
