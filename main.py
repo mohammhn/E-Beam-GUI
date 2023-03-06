@@ -405,10 +405,16 @@ def show_values():
  
 # Driver code
 if __name__ == "__main__":
-    COM_PORT = input("Please enter COM PORT (e.g. for COM PORT 4 type COM4): ")
-    print("Connecting to COM PORT: " + COM_PORT)
+    # Windows:
+    # COM_PORT = input("Please enter COM PORT (e.g. for COM PORT 4 type COM4): ")
+    # print("Connecting to COM PORT: " + COM_PORT)
     
-    ser = serial.Serial(COM_PORT, baudrate=9600, timeout=1)
+    # ser = serial.Serial(COM_PORT, baudrate=9600, timeout=1)
+
+    # Mac M1:
+    # ser = serial.Serial('/dev/cu.usbserial-210', baudrate=9600, timeout=1)
+    ser = serial.Serial('/dev/tty.usbserial-210', baudrate=9600, timeout=1)
+    
     # ser.reset_input_buffer()
     input_Ser = ""
     
